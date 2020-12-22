@@ -1,9 +1,9 @@
-# Doncey Albin
-# 10/27/2020
-# This script was made to pan and tilt the OpenMV camera to a surface with the temperature threshold of interest.
+# Doncey Albin, (11/3/2020)
 
-from pyb import Servo
-import sensor, image, time, math, pyb
+
+import time
+from pyb import Servo, USB_VCP
+import sensor, time, math, pyb, image, ustruct
 
 # Color Tracking Thresholds (Grayscale Min, Grayscale Max)
 threshold_list = [(200, 255)]
@@ -39,51 +39,45 @@ s2 = Servo(2) # P8
 xPosToPulse = 1500 #Initial x-pos of Pan Servo (Center)
 yPosToPulse = 1500 #Initial y-pos of Tilt Servo (Center)
 
-s1.pulse_width(xPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 2500
-s2.pulse_width(yPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 2500
-time.sleep(4) # sleep for 3 seconds before panning to the object
+# FPS clock
+clock = time.clock()
 
-# initialize increment
-i = 0;
+# usb object
+usb = USB_VCP()
 
-# Initialize Err lists for pan and tilt
-xErrList = []
-yErrList = []
-
-while(True):
-    time = pyb.millis()
+while (True):
     clock.tick()
-    img = sensor.snapshot()
-    for blob in img.find_blobs(threshold_list, pixels_threshold=100, area_threshold=100, merge=True):
-        stats = img.get_statistics(thresholds=threshold_list, roi=blob.rect())
-        img.draw_rectangle(blob.rect())
-        img.draw_cross(blob.cx(), blob.cy())
-        #img.draw_string(blob.x(), blob.y() - 10, "%.2f C" % map_g_to_temp(stats.mean()), mono_space=False)
-        img.to_rainbow(color_palette=sensor.PALETTE_IRONBOW) # color it
-        #print("FPS %f - Lepton Temp: %f C" % (clock.fps(), sensor.ioctl(sensor.IOCTL_LEPTON_GET_FPA_TEMPERATURE)))
+    img = sensor.snapshot(pixformat=sensor.GRAYSCALE)
+    blobs = img.find_blobs(threshold_list, pixels_threshold=100, area_threshold=100, merge=True)
 
-        # increment the increment
-        i = i + 1
+    if (blobs):
+        fire_blob = max(blobs, key = lambda x: x.density())
+        img.draw_rectangle(fire_blob.rect())
+        img.draw_cross(fire_blob.cx(), fire_blob.cy())
+        img.to_rainbow(color_palette=sensor.PALETTE_IRONBOW) # color it
 
         # For pan control
-        xPos = blob.cx()
-        xPosErr = 80 - xPos
-        xErr_PGain = 0.6
+        xPos = fire_blob.cx()
+        xPosErr = 90 - xPos
+        xErr_PGain = 1.0
 
         # For tilt control
-        yPos = blob.cy()
-        yPosErr = 60 - yPos
-        yErr_PGain = 0.6
+        yPos = fire_blob.cy()
+        yPosErr = 80 - yPos
+        yErr_PGain = 1.0
 
-        if xPos != 80:
+        if xPos != 120:
             xPosToPulse = int(xPosToPulse + xErr_PGain*xPosErr)
             s1.pulse_width(xPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 2500
 
-        if yPos != 60:
+        if yPos != 80:
             yPosToPulse = int(yPosToPulse - yErr_PGain*yPosErr)
             s2.pulse_width(yPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 250
 
-        img.draw_string(blob.x(), blob.y() - 20, "Pan Error: %.2f pixels" % xPosErr, mono_space=False)
-        img.draw_string(blob.x(), blob.y() - 10, "Tilt Error: %.2f pixels" % yPosErr, mono_space=False)
-        print(xPosErr)
-        print(yPosErr)
+        img.draw_string(fire_blob.x(), fire_blob.y() - 10, "Pan Error: %.2f pixels" % xPosErr, mono_space=False)
+
+        if (xPosErr == 0):
+            #imgUSB = sensor.snapshot().compress()
+            imgUSB = img.compress()
+            usb.send(ustruct.pack("<L", imgUSB.size()))
+            usb.send(imgUSB)
