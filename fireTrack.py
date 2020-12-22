@@ -1,5 +1,7 @@
-# Doncey Albin, (11/3/2020)
-
+# Doncey Albin, (12/7/2020)
+# This is to test sending pixel error to RaspberriPi for processing...
+# Ultimately, it may be best to do all controls from the RaspberryPi, while the
+# OpenMV camera just provides data on the fire's wherabouts from the camera frame.
 
 import time
 from pyb import Servo, USB_VCP
@@ -49,7 +51,7 @@ while (True):
     clock.tick()
     img = sensor.snapshot(pixformat=sensor.GRAYSCALE)
     blobs = img.find_blobs(threshold_list, pixels_threshold=100, area_threshold=100, merge=True)
-
+    
     if (blobs):
         fire_blob = max(blobs, key = lambda x: x.density())
         img.draw_rectangle(fire_blob.rect())
@@ -58,26 +60,13 @@ while (True):
 
         # For pan control
         xPos = fire_blob.cx()
-        xPosErr = 90 - xPos
-        xErr_PGain = 1.0
 
         # For tilt control
         yPos = fire_blob.cy()
-        yPosErr = 80 - yPos
-        yErr_PGain = 1.0
 
-        if xPos != 120:
-            xPosToPulse = int(xPosToPulse + xErr_PGain*xPosErr)
-            s1.pulse_width(xPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 2500
-
-        if yPos != 80:
-            yPosToPulse = int(yPosToPulse - yErr_PGain*yPosErr)
-            s2.pulse_width(yPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 250
-
-        img.draw_string(fire_blob.x(), fire_blob.y() - 10, "Pan Error: %.2f pixels" % xPosErr, mono_space=False)
-
-        if (xPosErr == 0):
-            #imgUSB = sensor.snapshot().compress()
-            imgUSB = img.compress()
-            usb.send(ustruct.pack("<L", imgUSB.size()))
-            usb.send(imgUSB)
+        #img.draw_string(fire_blob.x(), fire_blob.y() - 10, "Pan Error: %.2f pixels" % xPosErr, mono_space=False)
+        #imgUSB = img.compress()
+        #usb.send(ustruct.pack("<L", imgUSB.size()))
+        
+        usb.send(xPos)
+        usb.send(yPos)
