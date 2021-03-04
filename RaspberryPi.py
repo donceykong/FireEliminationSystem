@@ -285,4 +285,4 @@ if __name__ == '__main__':     # Program entrance
     try:
         loop()
     except KeyboardInterrupt:  # Press ctrl-c to end the program.
-        destroy(
+        destroy()
