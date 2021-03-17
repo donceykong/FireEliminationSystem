@@ -1,5 +1,5 @@
-Doncey Albin
-# 3/16/2021
+#Doncey Albin
+# 3/17/2021
 
 import time
 import math
@@ -111,34 +111,38 @@ def servo_setup():
 def alarm_setup():
     GPIO.setmode(GPIO.BCM)               # use PHYSICAL GPIO Numbering
     GPIO.setwarnings(False)              # Remove "already in use warning"
-    global Ena,In1,In2, pwm
-    Enb,In3,In4 = 5,6,16
+    global Ena,In1,In2,pwm1
+    Ena,In1,In2 = 23,22,20
     GPIO.setup(Ena,GPIO.OUT)
     GPIO.setup(In1,GPIO.OUT)
     GPIO.setup(In2,GPIO.OUT)
-    pwm1 = GPIO.PWM(Ena,200)
+    pwm1 = GPIO.PWM(Ena,255)
     pwm1.start(0)
 
 def alarm():
+    print ("*Starting Alarm*\n")
     GPIO.output(In1,GPIO.HIGH)
     GPIO.output(In2,GPIO.LOW)
-    pwm1.ChangeDutyCycle(50)    # Operate at 50% of Ena at 100Hz
+    pwm1.ChangeDutyCycle(50)    # Operate at 100% of Ena at 100Hz
 
 def pump_setup():
     GPIO.setmode(GPIO.BCM)               # use PHYSICAL GPIO Numbering
     GPIO.setwarnings(False)              # Remove "already in use warning"
-    global Enb,In3,In4, pwm
-    Enb,In3,In4 = 26,22,23
+    global Enb,In3,In4,pwm2
+    Enb,In3,In4 = 5,6,16
     GPIO.setup(Enb,GPIO.OUT)
     GPIO.setup(In3,GPIO.OUT)
     GPIO.setup(In4,GPIO.OUT)
-    pwm2 = GPIO.PWM(Enb,200)
+    pwm2 = GPIO.PWM(Enb,255)
     pwm2.start(0)
     
 def pump():
+    print ("*Starting pump*\n")
     GPIO.output(In3,GPIO.HIGH)
     GPIO.output(In4,GPIO.LOW)
-    pwm2.ChangeDutyCycle(50)    # Operate at 50% of Ena at 100Hz
+    pwm2.ChangeDutyCycle(100)  # Operate at 100% of Ena at 100Hz
+    time.sleep(5)              # Run pump for 5 seconds
+    pwm2.ChangeDutyCycle(0)    # Turn off pump
     
 def pServoWrite(angle):      # make the pan servo rotate to specific angle, 0-180
     if(angle<0):
@@ -171,20 +175,20 @@ def nServoWrite(angle):      # make the tilt servo rotate to specific angle, 0-1
 def loop():
     fire_det = False
     xServo = 0
-    yServo = 80
-    y2Servo = 80
-    nozzle = 90
+    yServo = 60
+    y2Servo = 60
+    nozzle = 135
     
     pServoWrite(xServo)
     tServoWrite(yServo)
     t2ServoWrite(y2Servo)
-    nServoWrite(nozzle)
-    time.sleep(0.5)
-
+#    nServoWrite(nozzle)
+    time.sleep(0.1)
+    
     panCamera(fire_det)
-
+    
 def panCamera(fire_det):
-    print ('Camera Searching For Fire')
+    print ('*Camera Searching For Fire*')
     while(not fire_det):
         for i in range(0, 180, 3):
             data = sp.read(1)[0]
@@ -192,7 +196,7 @@ def panCamera(fire_det):
             pServoWrite(xServo)
             if(not(data == 244)):
                 fire_det = True
-                servoControl(xServo, 90, 90, 0)
+                servoControl(xServo, 90, 90, 135, 0)
                 break
 
         if(fire_det):
@@ -204,11 +208,12 @@ def panCamera(fire_det):
             pServoWrite(xServo)
             if(not(data == 244)):
                 fire_det = True
-                servoControl(xServo, 90, 90, 0)
+                servoControl(xServo, 90, 90, 135, 0)
                 break
 
-def servoControl(xServo, yServo, y2Servo, emailNum):
-    print ('Fire Detected')
+def servoControl(xServo, yServo, y2Servo, nServo, emailNum):
+    print ("\n\t *****FIRE DETECTED***** \n")
+    print ("*Tracking fire*")
     sp.close()
     sp.open()
     while(True):
@@ -218,59 +223,63 @@ def servoControl(xServo, yServo, y2Servo, emailNum):
         yPos = sp.read(1)[0]
         yErr = 15 - yPos
 
-        xPGain = 0.06
-        yPGain = 0.06
+        #xPGain = 0.06
+        #yPGain = 0.06
 
         xServo = xServo - pidx(xErr) #xServo + (xPGain*xErr)
         yServo = yServo - pidy(yErr) #yServo - (yPGain*yErr)
         y2Servo = y2Servo - pidy(yErr) #y2Servo - (yPGain*yErr)
-
+#        nServo = nServo + yServo
+        
         # Print current angle of pan and tilt servomotors from horizontal
 #        print ("pan servo: %2f, tilt servo: %2f" % (xServo, 90 - yServo))
 
-    # Print Pan/Tilt Error
-        print (xErr)
+        # Print Pan/Tilt Error
+#        print (xErr)
 
         # Correct for servomotors going beyond angle bounds
-        if(yServo > 180 and y2Servo < 0):
+        if(yServo > 180 and y2Servo > 180):
             yServo = 180
-            y2Servo = 0
-        elif(yServo < 0 and y2Servo > 180):
-            yServo = 0
             y2Servo = 180
+        elif(yServo < 0 and y2Servo < 0):
+            yServo = 0
+            y2Servo = 0
 
         if(xServo > 180):
             xServo = 180
         elif(xServo < 0):
             xServo = 0
+            
+#        if(nServo > 180):
+#            nServo = 180
+#        elif(xServo < 0):
+#            nServo = 0
 
         # Move servomotors to angle
         pServoWrite(xServo)
         tServoWrite(yServo)
         t2ServoWrite(y2Servo)
-#        print ("Fire is % 3f feet away" %(read_lidar()/12.0))
+#        nServoWrite(nServo)
 
         # If camera is centered, then email snapshot of photo
         if((xErr <= 1 and xErr >= -1) and (yErr <= 1 and yErr >= -1) and emailNum == 0):
             emailPhoto(xServo, yServo, y2Servo)
 
 def emailPhoto(xServo, yServo, y2Servo):
-     print ('Emailing Photo of Fire')
+     print ('*Emailing Photo of Fire*')
      sp.flush()
      i = 0
      while (True):
          size = struct.unpack('<L', sp.read(4))[0]
          img = sp.read(size)
-         print("photo unpacked")
+         print("\tPhoto data unpacked.")
 
          if (True):
-              i = i + 1
-              print("fire detected " + str(i) + " times.")
-              with open("img" + str(i) + ".jpg", "wb") as f:
+              with open("fire.jpg", "wb") as f:
                    f.write(img)
 
               # We assume that the image file is in the same directory that you run your Python script from
-              fp = open("img" + str(i) + ".jpg", 'rb')
+              fp = open("fire.jpg", 'rb')
               image = MIMEImage(fp.read(),_subtype="jpg")
               fp.close()
 
@@ -285,41 +294,53 @@ def emailPhoto(xServo, yServo, y2Servo):
               #server.quit()
 
               sp.flush()
-              alarm()
               
-              servoControl(xServo, yServo, y2Servo, 1)
+              print("\tEmail sent.\n")
+              # Sound Alarm, tilt nozzle, and spray fire
+              alarm()
+              tilt_nozzle()
+              pump()
+              
+              servoControl(xServo, yServo, y2Servo, 135, 1)
 
 def read_lidar():
-    while (True):
-        try:
-            # We print tuples so you can plot with Mu Plotter
-            lidar_inches = (sensor.distance - 10)/2.54 # Distance in inches. Please note the -10 is for correcting the sensor measurement in cm.
-        except RuntimeError as e:
-            # If we get a reading error, just print it and keep truckin'
-            lidar_inches = e
+    try:
+        # We print tuples so you can plot with Mu Plotter
+        lidar_inches = (sensor.distance - 10)/2.54 # Distance in inches. Please note the -10 is for correcting the sensor measurement in cm.
+    except RuntimeError as e:
+        # If we get a reading error, just print it and keep truckin'
+        lidar_inches = e
 
     return lidar_inches
 
 def tilt_nozzle():
+    print ("*Tilting Nozzle*")
+    
     d_fire = read_lidar()
+    print ("\tFire is % 10f inches away." %(d_fire))
+    
     x_offset = 1.9976378 + d_fire
     y_offset = 2.9429134
     theta = math.degrees(math.atan(x_offset/y_offset))
+    print ("\tNozzle Servo tilting down% 3f degrees.\n" %(90 - theta))
     
-    nozzle_angle = 90 + theta
-    nServoWrite(nozzle_angle)
-    print (nozzle_angle)
-
+    nozzle_angle = theta #Assuming 0 degrees downwards
+    #nServoWrite(nozzle_angle)
+    
 def destroy():
+    print ("*Program terminated*")
     p.stop()
     t.stop()
     t2.stop()
     n.stop()
-    GPIO.cleanup() # changes the used GPIO pins to input
-    sp.close()     # Closes the serial port
+    pwm1.stop()
+    pwm2.stop()
+    #GPIO.cleanup() # changes the used GPIO pins to input
+    sp.close()      # Closes the serial port
 
 if __name__ == '__main__':     # Program entrance
-    print ('Fire detection system is starting...')
+    print ("\t *****Fire detection system is starting****\n")
+    pump_setup()
     alarm_setup()
     servo_setup()
     setupEmail()
