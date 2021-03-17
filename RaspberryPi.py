@@ -302,7 +302,7 @@ def read_lidar():
 
 def tilt_nozzle():
     d_fire = read_lidar()
-    x_offset = 1.9976378
+    x_offset = 1.9976378 + d_fire
     y_offset = 2.9429134
     theta = math.degrees(math.atan(x_offset/y_offset))
     
